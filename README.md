@@ -1,16 +1,23 @@
-# Edging the World Cup Live — Worker Integrated
+# Jack Holitza's Guide to The World Cup — Master v2
 
-This package has the Cloudflare Worker URL baked into `index.html`:
+This is the master app built from the working matchday HTML plus the full prior modeling cache.
 
-https://wc26liveapi.jack-holitza.workers.dev
+Included:
+- 48 teams
+- 1,248-player layer
+- Expected XIs
+- Group stage match center
+- Match forecasts and fair sportsbook-style odds
+- Monte Carlo World Cup futures
+- Group machine
+- Bracket machine
+- Futures/slip builder
+- Matchday sync through Cloudflare Pages Functions
 
-Upload/commit `index.html` to your GitHub Pages repo root. The site fetches only through the Cloudflare Worker. Do not place your API-Football key in this HTML.
+Deploy on Cloudflare Pages with:
+- Framework preset: None
+- Build command: blank
+- Build output directory: `/`
+- Secret: `WORLDCUP26_TOKEN`
 
-Live data flow:
-- `/health` validates the Worker.
-- `/today?date=YYYY-MM-DD` gets scheduled/current fixtures for the Denver-local day.
-- `/live` pulls live fixtures only during live windows.
-- `/events?fixture=ID` pulls goal/card events for relevant fixtures.
-- `/lineups?fixture=ID` pulls lineups only near kickoff/live/final windows.
-
-The site stores the last successful payload in localStorage and ripples the live cache into match cards, ticker, group tables, bracket/model projections, and data health.
+The app calls `/api/games` on Cloudflare Pages. If hosted on GitHub Pages, it falls back to the existing Worker URL.
