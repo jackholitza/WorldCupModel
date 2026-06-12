@@ -1,34 +1,16 @@
-# Edging the World Cup Live
+# Edging the World Cup Live — Worker Integrated
 
-A GitHub Pages front end for WC26 live score/event modeling.
+This package has the Cloudflare Worker URL baked into `index.html`:
 
-## Files
+https://wc26liveapi.jack-holitza.workers.dev
 
-- `index.html` — public GitHub Pages app. No secret keys in this file.
-- `cloudflare-worker-api-football.js` — optional Cloudflare Worker proxy template for API-Football.
+Upload/commit `index.html` to your GitHub Pages repo root. The site fetches only through the Cloudflare Worker. Do not place your API-Football key in this HTML.
 
-## Live data design
+Live data flow:
+- `/health` validates the Worker.
+- `/today?date=YYYY-MM-DD` gets scheduled/current fixtures for the Denver-local day.
+- `/live` pulls live fixtures only during live windows.
+- `/events?fixture=ID` pulls goal/card events for relevant fixtures.
+- `/lineups?fixture=ID` pulls lineups only near kickoff/live/final windows.
 
-The front end only needs live scores, goalscorers/events, and lineups if available. It calculates standings, bracket movement, and model fair odds locally.
-
-API call strategy:
-
-- No match window open: no API call from the front end.
-- Pre-match: slow polling.
-- 30 minutes before kickoff: lineup window opens.
-- Match live: controlled polling.
-- After full time: one final verification, then stop.
-- Quota hit or API fails: show last cached data and fall back to embedded model projections.
-
-## Cloudflare Worker setup
-
-1. Create a Worker.
-2. Paste `cloudflare-worker-api-football.js`.
-3. Add secret `API_FOOTBALL_KEY`.
-4. Optional vars:
-   - `API_FOOTBALL_LEAGUE_ID=1`
-   - `API_FOOTBALL_SEASON=2026`
-5. Deploy.
-6. In the site, open the Live tab and paste your Worker URL ending with `/live`.
-
-Never paste an API key into `index.html`.
+The site stores the last successful payload in localStorage and ripples the live cache into match cards, ticker, group tables, bracket/model projections, and data health.

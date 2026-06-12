@@ -80,6 +80,12 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
 .live-ticker .tick{background:linear-gradient(135deg,#061a40,#102a71 55%,#001d18);color:white;border:1px solid rgba(255,255,255,.15)}.live-ticker .sub,.live-ticker .ticker-label{color:#cbd5e1!important}
 .field-pro{position:relative;overflow:hidden;background:repeating-linear-gradient(90deg,#15803d 0 13%,#16a34a 13% 26%);border:4px solid rgba(255,255,255,.92);box-shadow:inset 0 0 0 2px rgba(255,255,255,.25),0 18px 38px rgba(6,26,64,.18);border-radius:30px;min-height:520px;padding:18px}.field-pro:before{content:"";position:absolute;left:8%;right:8%;top:50%;height:3px;background:rgba(255,255,255,.65)}.field-pro:after{content:"";position:absolute;left:50%;top:50%;width:115px;height:115px;border:3px solid rgba(255,255,255,.58);border-radius:999px;transform:translate(-50%,-50%)}.lineup-grid{position:relative;z-index:1;display:grid;gap:14px;height:100%;min-height:470px;align-content:space-around}.lineup-row{display:flex;justify-content:space-around;gap:9px;align-items:center}.lineup-node{max-width:128px;min-width:86px;border-radius:18px;background:rgba(255,255,255,.94);box-shadow:0 10px 22px rgba(0,0,0,.18);padding:9px;text-align:center;color:#061a40;border:1px solid rgba(255,255,255,.65)}.lineup-node b{display:block;font-size:12px;line-height:1.1}.lineup-node span{font-size:10px;font-weight:1000;color:#64748b;text-transform:uppercase;letter-spacing:.05em}.rating-badge{display:inline-flex;border-radius:999px;background:#061a40;color:white;padding:3px 7px;margin-top:4px;font-size:10px;font-weight:1000}
 
+
+.live-ripple-banner{margin:-6px -6px 12px;padding:10px 12px;border-radius:18px;background:linear-gradient(90deg,#001b5d,#0066ff,#00a86b);color:white;font-weight:1000;box-shadow:0 12px 24px rgba(0,102,255,.2)}
+.live-rippled{outline:2px solid rgba(0,102,255,.22)}
+.event-pill.goal{background:#ecfff5;border-color:#b9f0d9;color:#087747}.event-pill.card-red{background:#fff0f1;border-color:#ffd3d7;color:#ad1620}
+.cache-log{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;white-space:pre-wrap;background:#061a40;color:#dbeafe;border-radius:24px;padding:16px;min-height:260px;overflow:auto}
+.live-card.live-now{outline:3px solid rgba(0,168,107,.35);box-shadow:0 28px 56px rgba(0,168,107,.18)}
 </style>
 </head>
 <body>
@@ -105,7 +111,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
   <div class="head"><h2>Live Source Setup</h2><span class="mini">scores + goalscorers only · no wasted calls</span></div>
   <div class="card flat">
     <div class="live-controls">
-      <div class="control"><label>Cloudflare Worker URL</label><input id="liveWorkerUrl" placeholder="https://your-worker.workers.dev/live" oninput="saveLiveSettings()"></div>
+      <div class="control"><label>Cloudflare Worker URL</label><input id="liveWorkerUrl" placeholder="https://wc26liveapi.jack-holitza.workers.dev" value="https://wc26liveapi.jack-holitza.workers.dev" oninput="saveLiveSettings()"></div>
       <div class="control"><label>Mode</label><select id="liveMode" onchange="saveLiveSettings();renderLiveRoom()"><option value="autopilot">Autopilot</option><option value="manual">Manual only</option><option value="demo">Demo/cache only</option></select></div>
       <div class="control"><label>Refresh aggressiveness</label><select id="liveRefreshMode" onchange="saveLiveSettings();renderLiveRoom()"><option value="safe">Safe free-tier</option><option value="matchday">Matchday</option><option value="hot">Hot during live games</option></select></div>
       <button class="btn blue" onclick="testLiveEndpoint()">Test Fetch</button>
@@ -526,141 +532,247 @@ function renderDataHealth(){
 })();
 
 
-/* ===== Live API Autopilot Frontend ===== */
+/* ===== Live API Autopilot Frontend — Worker Integrated ===== */
 (function(){
-  const LS_SETTINGS='wc26_live_settings_v1';
-  const LS_CACHE='wc26_live_cache_v1';
-  const LS_LAST_CALL='wc26_live_last_call_v1';
-  const DEFAULT_SETTINGS={workerUrl:'',mode:'autopilot',refreshMode:'safe'};
+  const WORKER_BASE='https://wc26liveapi.jack-holitza.workers.dev';
+  const LS_SETTINGS='wc26_live_settings_v2';
+  const LS_CACHE='wc26_live_cache_v2';
+  const LS_LAST_CALL='wc26_live_last_call_v2';
+  const DEFAULT_SETTINGS={workerUrl:WORKER_BASE,mode:'autopilot',refreshMode:'matchday'};
+  const API_TZ='America/Denver';
+
   function now(){return new Date()}
   function readJSON(k,fallback){try{return JSON.parse(localStorage.getItem(k)||'')||fallback}catch(e){return fallback}}
   function writeJSON(k,v){localStorage.setItem(k,JSON.stringify(v))}
   function settings(){return {...DEFAULT_SETTINGS,...readJSON(LS_SETTINGS,{})}}
-  function liveCache(){return readJSON(LS_CACHE,{generated_at:null,source:'local',matches:{},events:[],lineups:{},errors:[],last_success:null,last_status:'idle'})}
-  function saveCache(c){writeJSON(LS_CACHE,c)}
+  function cleanBase(u){return String(u||WORKER_BASE).trim().replace(/\/(health|today|live)\/?$/,'').replace(/\/+$/,'')}
+  function saveSettings(s){s.workerUrl=cleanBase(s.workerUrl);writeJSON(LS_SETTINGS,s)}
+  function localDateISO(d=new Date()){
+    const parts=new Intl.DateTimeFormat('en-CA',{timeZone:API_TZ,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);
+    const o=Object.fromEntries(parts.map(p=>[p.type,p.value])); return `${o.year}-${o.month}-${o.day}`;
+  }
+  function liveCache(){return readJSON(LS_CACHE,{generated_at:null,source:'local',matches:{},events:[],lineups:{},health:null,diagnostics:[],errors:[],last_success:null,last_status:'idle',last_endpoint:null})}
+  function saveCache(c){c.generated_at=new Date().toISOString();writeJSON(LS_CACHE,c);applyLiveCacheToData(c)}
+  function addDiag(c,msg,type='info'){c.diagnostics=[{at:new Date().toISOString(),type,message:msg},...(c.diagnostics||[])].slice(0,15)}
+  function addErr(c,msg){c.errors=[{at:new Date().toISOString(),message:msg},...(c.errors||[])].slice(0,10)}
+
   window.saveLiveSettings=function(){
     const s=settings();
-    s.workerUrl=(document.getElementById('liveWorkerUrl')?.value||s.workerUrl||'').trim();
+    s.workerUrl=cleanBase(document.getElementById('liveWorkerUrl')?.value||s.workerUrl);
     s.mode=document.getElementById('liveMode')?.value||s.mode;
     s.refreshMode=document.getElementById('liveRefreshMode')?.value||s.refreshMode;
-    writeJSON(LS_SETTINGS,s);
+    saveSettings(s);
   }
-  function hydrateSettings(){const s=settings(); if(liveWorkerUrl) liveWorkerUrl.value=s.workerUrl||''; if(liveMode) liveMode.value=s.mode||'autopilot'; if(liveRefreshMode) liveRefreshMode.value=s.refreshMode||'safe'}
-  function cleanTeamName(n){return String(n||'').replace(/Korea Republic/i,'South Korea').replace(/USA|United States of America/i,'United States').trim()}
+  function hydrateSettings(){
+    const s=settings(); saveSettings(s);
+    if(window.liveWorkerUrl) liveWorkerUrl.value=s.workerUrl;
+    if(window.liveMode) liveMode.value=s.mode;
+    if(window.liveRefreshMode) liveRefreshMode.value=s.refreshMode;
+  }
+  function apiUrl(path){return cleanBase(settings().workerUrl)+path}
+  async function fetchJSON(path){
+    const url=apiUrl(path);
+    const res=await fetch(url,{cache:'no-store'});
+    const data=await res.json().catch(()=>({ok:false,error:'Non-JSON response'}));
+    if(!res.ok) throw new Error(`${path} returned ${res.status}: ${data.error||data.message||'unknown error'}`);
+    return data;
+  }
+  function unwrapResponse(data){
+    if(!data) return [];
+    if(Array.isArray(data.matches)) return data.matches;
+    if(Array.isArray(data.response)) return data.response;
+    if(Array.isArray(data.data?.response)) return data.data.response;
+    if(Array.isArray(data.data?.matches)) return data.data.matches;
+    return [];
+  }
+  function cleanTeamName(n){
+    return String(n||'').replace(/Korea Republic/i,'South Korea').replace(/USA|United States of America/i,'United States').replace(/IR Iran/i,'Iran').replace(/Czech Republic/i,'Czechia').trim();
+  }
+  function getTeam(n){return (window.teams||[]).find(t=>cleanTeamName(t.country)===cleanTeamName(n))||{country:cleanTeamName(n),flag:''}}
+  function normalizePayload(data,sourceEndpoint='unknown'){
+    const raw=unwrapResponse(data);
+    return raw.map(x=>{
+      if(x.home||x.away||x.home_team||x.away_team){
+        return {
+          api_fixture_id:x.fixture_id||x.id||x.api_fixture_id||null,
+          home:cleanTeamName(x.home||x.home_team||x.team_a), away:cleanTeamName(x.away||x.away_team||x.team_b),
+          date:x.date||x.datetime||x.kickoff||null, status:x.status||x.match_status||'scheduled', minute:x.minute||x.elapsed||null,
+          home_goals:x.home_goals??x.score_home??x.goals_home??0, away_goals:x.away_goals??x.score_away??x.goals_away??0,
+          events:x.events||[], lineups:x.lineups||[], sourceEndpoint
+        }
+      }
+      const fix=x.fixture||{}, home=x.teams?.home||{}, away=x.teams?.away||{}, goals=x.goals||{};
+      const ev=(x.events||[]).map(e=>({
+        minute:e.time?.elapsed||e.minute||'', extra:e.time?.extra||'',
+        team:cleanTeamName(e.team?.name||e.team||''), type:e.type||'', detail:e.detail||'',
+        player:e.player?.name||e.player||'', assist:e.assist?.name||e.assist||''
+      }));
+      const lineups=(x.lineups||[]).map(l=>({
+        team:cleanTeamName(l.team?.name||l.team||''), formation:l.formation||'',
+        players:[...(l.startXI||[]).map(p=>p.player?.name||p.name||''),...(l.substitutes||[]).map(p=>p.player?.name||p.name||'')].filter(Boolean)
+      }));
+      return {
+        api_fixture_id:fix.id||x.id||null,
+        home:cleanTeamName(home.name), away:cleanTeamName(away.name),
+        date:fix.date||null, status:fix.status?.short||fix.status?.long||'scheduled', minute:fix.status?.elapsed||null,
+        home_goals:goals.home??0, away_goals:goals.away??0,
+        events:ev, lineups, sourceEndpoint
+      };
+    }).filter(m=>m.home&&m.away);
+  }
   function matchFixtureByTeams(home,away,dateStr){
     const h=cleanTeamName(home),a=cleanTeamName(away); let day=dateStr?new Date(dateStr).toDateString():'';
-    return fixtures.find(f=>cleanTeamName(f.team_a)===h&&cleanTeamName(f.team_b)===a&&(day?new Date(f.datetime_mt).toDateString()===day:true)) ||
-           fixtures.find(f=>cleanTeamName(f.team_a)===a&&cleanTeamName(f.team_b)===h&&(day?new Date(f.datetime_mt).toDateString()===day:true)) ||
-           fixtures.find(f=>(cleanTeamName(f.team_a)===h&&cleanTeamName(f.team_b)===a)||(cleanTeamName(f.team_a)===a&&cleanTeamName(f.team_b)===h));
+    return (window.fixtures||[]).find(f=>cleanTeamName(f.team_a)===h&&cleanTeamName(f.team_b)===a&&(day?new Date(f.datetime_mt).toDateString()===day:true)) ||
+           (window.fixtures||[]).find(f=>cleanTeamName(f.team_a)===a&&cleanTeamName(f.team_b)===h&&(day?new Date(f.datetime_mt).toDateString()===day:true)) ||
+           (window.fixtures||[]).find(f=>(cleanTeamName(f.team_a)===h&&cleanTeamName(f.team_b)===a)||(cleanTeamName(f.team_a)===a&&cleanTeamName(f.team_b)===h));
   }
   function fixtureWindow(f){
-    const k=new Date(f.datetime_mt); const n=now();
-    const mins=(n-k)/60000;
+    const k=new Date(f.datetime_mt); const mins=(now()-k)/60000;
     if(mins<-1440) return 'future';
-    if(mins<-120) return 'sleep';
+    if(mins<-180) return 'sleep';
     if(mins<-30) return 'prematch_slow';
     if(mins<0) return 'lineups';
-    if(mins<110) return 'live';
-    if(mins<150) return 'final_check';
+    if(mins<125) return 'live';
+    if(mins<180) return 'final_check';
     return 'closed';
   }
-  function activeWindowFixtures(){
-    return fixtures.filter(f=>['prematch_slow','lineups','live','final_check'].includes(fixtureWindow(f))).sort((a,b)=>new Date(a.datetime_mt)-new Date(b.datetime_mt));
+  function windowLabel(f){return {future:'Future',sleep:'Sleeping',prematch_slow:'Pre-match slow poll',lineups:'Lineups window',live:'Live poll',final_check:'Final verification',closed:'Closed'}[fixtureWindow(f)]||fixtureWindow(f)}
+  function activeWindowFixtures(){return (window.fixtures||[]).filter(f=>['prematch_slow','lineups','live','final_check'].includes(fixtureWindow(f))).sort((a,b)=>new Date(a.datetime_mt)-new Date(b.datetime_mt));}
+  function nextFixtures(n=6){return (window.fixtures||[]).filter(f=>new Date(f.datetime_mt)>now()).sort((a,b)=>new Date(a.datetime_mt)-new Date(b.datetime_mt)).slice(0,n)}
+  function refreshSeconds(){
+    const s=settings(), wins=activeWindowFixtures().map(fixtureWindow);
+    if(!wins.length) return 1800;
+    if(wins.includes('live')) return s.refreshMode==='hot'?60:(s.refreshMode==='matchday'?90:150);
+    if(wins.includes('lineups')) return s.refreshMode==='hot'?180:300;
+    if(wins.includes('final_check')) return 300;
+    return 600;
   }
-  function refreshSeconds(){const s=settings(); const m=s.refreshMode; const wins=activeWindowFixtures().map(fixtureWindow); if(!wins.length) return 1800; if(wins.includes('live')) return m==='hot'?60:(m==='matchday'?90:120); if(wins.includes('lineups')) return m==='hot'?180:300; if(wins.includes('final_check')) return 300; return 600;}
   function shouldCallAPI(){
     const s=settings(); if(s.mode!=='autopilot') return false; if(!s.workerUrl) return false; if(!activeWindowFixtures().length) return false;
     const last=+(localStorage.getItem(LS_LAST_CALL)||0); return Date.now()-last>refreshSeconds()*1000;
   }
-  function apiWindowLabel(f){const w=fixtureWindow(f); return {future:'Future',sleep:'Sleeping',prematch_slow:'Pre-match slow poll',lineups:'Lineups window',live:'Live poll',final_check:'Final verification',closed:'Closed'}[w]||w}
-  function teamObj(n){return teams.find(t=>t.country===n)||team(n)||{country:n,flag:''}}
-  function normalizePayload(data){
-    if(!data) return [];
-    if(Array.isArray(data.matches)) return data.matches.map(m=>({...m,home:cleanTeamName(m.home||m.home_team||m.team_a),away:cleanTeamName(m.away||m.away_team||m.team_b)}));
-    if(Array.isArray(data.response)){
-      return data.response.map(x=>{
-        const fix=x.fixture||{}, home=x.teams?.home||{}, away=x.teams?.away||{}, goals=x.goals||{}, score=x.score||{};
-        const events=(x.events||[]).map(e=>({minute:e.time?.elapsed||e.minute||'',extra:e.time?.extra||'',team:cleanTeamName(e.team?.name||e.team||''),type:e.type||'',detail:e.detail||'',player:e.player?.name||e.player||'',assist:e.assist?.name||e.assist||''}));
-        const lineups=(x.lineups||[]).map(l=>({team:cleanTeamName(l.team?.name||l.team||''),formation:l.formation,players:(l.startXI||l.players||[]).map(p=>p.player?.name||p.name||'').filter(Boolean)}));
-        return {api_id:fix.id,status:fix.status?.short||fix.status?.long||'scheduled',minute:fix.status?.elapsed||0,datetime:fix.date,home:cleanTeamName(home.name),away:cleanTeamName(away.name),home_goals:goals.home??score.fulltime?.home??0,away_goals:goals.away??score.fulltime?.away??0,events,lineups,raw_status:fix.status};
-      })
-    }
-    return [];
-  }
+  function stableMatchId(m){const f=matchFixtureByTeams(m.home,m.away,m.date); return f?.match_id || m.api_fixture_id || `${m.home}_${m.away}_${m.date||''}`.toLowerCase().replace(/[^a-z0-9]+/g,'_')}
   function mergeLiveMatches(matches,source='worker'){
-    const c=liveCache(); c.generated_at=new Date().toISOString(); c.source=source; c.last_status='ok'; c.last_success=c.generated_at;
+    const c=liveCache(); c.source=source; c.last_status='ok'; c.last_success=new Date().toISOString();
     for(const m of matches){
-      const f=matchFixtureByTeams(m.home,m.away,m.datetime); const id=f?.match_id || [m.home,m.away,(m.datetime||'')].join('_').toLowerCase().replace(/[^a-z0-9]+/g,'_');
-      const old=c.matches[id]||{};
-      const merged={...old,...m,match_id:id,fixture_match_id:f?.match_id||id,group:f?.group||old.group,venue:f?.venue||old.venue,city:f?.city||old.city,updated_at:new Date().toISOString()};
-      merged.events=[...(old.events||[]),...(m.events||[])].filter((e,i,arr)=>i===arr.findIndex(x=>JSON.stringify(x)===JSON.stringify(e))).sort((a,b)=>(+a.minute||0)-(+b.minute||0));
-      if(m.lineups?.length) merged.lineups=m.lineups;
-      c.matches[id]=merged;
+      const f=matchFixtureByTeams(m.home,m.away,m.date); const id=stableMatchId(m);
+      const prev=c.matches[id]||{};
+      const events=[...(prev.events||[]),...(m.events||[])].filter((e,i,arr)=>i===arr.findIndex(x=>`${x.minute}|${x.team}|${x.type}|${x.detail}|${x.player}`===`${e.minute}|${e.team}|${e.type}|${e.detail}|${e.player}`)).sort((a,b)=>(+a.minute||0)-(+b.minute||0));
+      c.matches[id]={...prev,...m,match_id:id,fixture_match_id:f?.match_id||prev.fixture_match_id||null,group:f?.group||prev.group||'',events,lineups:m.lineups?.length?m.lineups:(prev.lineups||[])};
     }
-    saveCache(c); return c;
+    addDiag(c,`Merged ${matches.length} live match record(s).`,'success'); saveCache(c); return c;
   }
-  async function fetchLive(){
-    const s=settings(); if(!s.workerUrl) throw new Error('No Worker URL configured.');
-    localStorage.setItem(LS_LAST_CALL,String(Date.now()));
-    const url=s.workerUrl+(s.workerUrl.includes('?')?'&':'?')+'scope=worldcup&ts='+Date.now();
-    const res=await fetch(url,{cache:'no-store'}); if(!res.ok) throw new Error('Worker returned '+res.status);
-    const data=await res.json(); const matches=normalizePayload(data); return mergeLiveMatches(matches,data.source||'worker');
+  async function refreshFromWorker(manual=false){
+    const c=liveCache(); localStorage.setItem(LS_LAST_CALL,String(Date.now()));
+    try{
+      c.last_status='fetching'; saveCache(c);
+      const today=localDateISO();
+      const health=await fetchJSON('/health'); c.health=health; addDiag(c,'Health check passed.','success');
+      const todayPayload=await fetchJSON(`/today?date=${today}`); const todayMatches=normalizePayload(todayPayload,'/today');
+      addDiag(c,`/today returned ${todayMatches.length} match record(s) for ${today}.`,todayMatches.length?'success':'warn');
+      let all=[...todayMatches];
+      const livePayload=await fetchJSON('/live'); const liveMatches=normalizePayload(livePayload,'/live');
+      addDiag(c,`/live returned ${liveMatches.length} live match record(s).`,liveMatches.length?'success':'info');
+      all=[...all,...liveMatches];
+      const candidates=all.filter(m=>m.api_fixture_id && (/live|1h|2h|ht|pen|aet/i.test(String(m.status)) || activeWindowFixtures().some(f=>cleanTeamName(f.team_a)===m.home||cleanTeamName(f.team_b)===m.home)));
+      for(const m of candidates.slice(0,6)){
+        try{
+          const ev=await fetchJSON(`/events?fixture=${encodeURIComponent(m.api_fixture_id)}`); const events=unwrapResponse(ev).map(e=>({minute:e.time?.elapsed||'',extra:e.time?.extra||'',team:cleanTeamName(e.team?.name||''),type:e.type||'',detail:e.detail||'',player:e.player?.name||'',assist:e.assist?.name||''}));
+          m.events=[...(m.events||[]),...events]; addDiag(c,`Events loaded for fixture ${m.api_fixture_id}: ${events.length}.`,'success');
+        }catch(e){addDiag(c,`Events unavailable for fixture ${m.api_fixture_id}: ${e.message}`,'warn')}
+        const f=matchFixtureByTeams(m.home,m.away,m.date);
+        if(f && ['lineups','live','final_check'].includes(fixtureWindow(f))){
+          try{
+            const lu=await fetchJSON(`/lineups?fixture=${encodeURIComponent(m.api_fixture_id)}`); const lineups=unwrapResponse(lu).map(l=>({team:cleanTeamName(l.team?.name||''),formation:l.formation||'',players:[...(l.startXI||[]).map(p=>p.player?.name||''),...(l.substitutes||[]).map(p=>p.player?.name||'')].filter(Boolean)}));
+            m.lineups=lineups; addDiag(c,`Lineups loaded for fixture ${m.api_fixture_id}: ${lineups.length}.`,'success');
+          }catch(e){addDiag(c,`Lineups unavailable for fixture ${m.api_fixture_id}: ${e.message}`,'warn')}
+        }
+      }
+      const out=mergeLiveMatches(all,'api-football-worker'); out.last_endpoint='/today + /live'; saveCache(out); renderLiveRoom(); rippleRender(); return out;
+    }catch(e){
+      c.last_status='error'; addErr(c,e.message); saveCache(c); renderLiveRoom(); return c;
+    }
   }
-  window.testLiveEndpoint=async function(){await manualLiveRefresh(true)};
-  window.manualLiveRefresh=async function(force=false){
-    const c=liveCache();
-    try{liveDot?.classList.remove('off','warn'); liveDot?.classList.add('on'); const out=await fetchLive(); renderLiveRoom(); return out;}
-    catch(e){c.last_status='error'; c.errors=[{at:new Date().toISOString(),message:e.message},...(c.errors||[])].slice(0,8); saveCache(c); if(liveDot){liveDot.classList.remove('on','warn'); liveDot.classList.add('off')} renderLiveRoom();}
-  }
+  window.manualLiveRefresh=async function(){return refreshFromWorker(true)};
+  window.testLiveEndpoint=async function(){return refreshFromWorker(true)};
+
   function liveFixtureState(f){
-    const c=liveCache(); const byId=c.matches[f.match_id]; if(byId) return byId;
-    const m=Object.values(c.matches).find(x=>x.fixture_match_id===f.match_id || (cleanTeamName(x.home)===cleanTeamName(f.team_a)&&cleanTeamName(x.away)===cleanTeamName(f.team_b)));
-    return m||null;
+    const c=liveCache(); return c.matches[f.match_id] || Object.values(c.matches||{}).find(m=>m.fixture_match_id===f.match_id || (cleanTeamName(m.home)===cleanTeamName(f.team_a)&&cleanTeamName(m.away)===cleanTeamName(f.team_b))) || null;
   }
-  function statusText(f,m){if(m?.status) return String(m.status).toUpperCase(); return apiWindowLabel(f)}
-  function liveProb(f,m){const A=team(f.team_a),B=team(f.team_b); const base=prob(A,B,'group'); if(!m) return base; const min=Math.min(100,+(m.minute||0)); const gd=(+(m.home_goals||0))-(+(m.away_goals||0)); let edge=Math.log(base.a/base.b)+(gd*(1+min/50)); let a=1/(1+Math.exp(-edge)); let d=Math.max(.03,base.d*(1-min/120)*(gd===0?1.25:.45)); let b=1-a; const scale=1-d; a*=scale; b*=scale; return {a,d,b};}
-  function liveExpectedScore(f,m){const A=team(f.team_a),B=team(f.team_b); const p=liveProb(f,m); let h=(1.15+(rating(A)-rating(B))/95)+(+(m?.home_goals||0))*0.55; let a=(1.05+(rating(B)-rating(A))/105)+(+(m?.away_goals||0))*0.55; h=Math.max((m?.home_goals||0),h); a=Math.max((m?.away_goals||0),a); return {dec:`${h.toFixed(1)} - ${a.toFixed(1)}`,whole:`${Math.round(h)} - ${Math.round(a)}`};}
-  function eventHTML(m){const ev=(m?.events||[]).filter(e=>/goal|card|substitution/i.test((e.type||'')+' '+(e.detail||''))).slice(-10); return ev.length?`<div class="event-strip">${ev.map(e=>`<span class="event-pill ${/goal/i.test(e.type+e.detail)?'goal':/red/i.test(e.detail)?'card-red':''}">${e.minute}${e.extra?`+${e.extra}`:''}' ${e.type||e.detail}: ${e.player||''} ${e.team?`· ${e.team}`:''}</span>`).join('')}</div>`:'<p class="sub">No goal/card events cached yet.</p>'}
+  window.liveFixtureState=liveFixtureState;
+  function applyLiveCacheToData(c=liveCache()){
+    if(!window.fixtures) return;
+    for(const f of fixtures){
+      const m=c.matches?.[f.match_id] || Object.values(c.matches||{}).find(x=>x.fixture_match_id===f.match_id || (cleanTeamName(x.home)===cleanTeamName(f.team_a)&&cleanTeamName(x.away)===cleanTeamName(f.team_b)));
+      if(!m) continue;
+      f.live_status=m.status; f.live_minute=m.minute; f.live_home_goals=m.home_goals; f.live_away_goals=m.away_goals; f.live_events=m.events||[]; f.live_lineups=m.lineups||[]; f.live_updated_at=c.last_success;
+    }
+    DATA_CACHE.live_cache_summary={last_success:c.last_success, matches_cached:Object.keys(c.matches||{}).length, status:c.last_status, worker:settings().workerUrl};
+    DATA_CACHE.fixtures=fixtures;
+  }
+  function rippleRender(){
+    try{if(window.renderTicker) renderTicker()}catch(e){}
+    try{if(window.renderMatches) renderMatches()}catch(e){}
+    try{if(window.generateModelBracket) generateModelBracket()}catch(e){}
+    try{if(window.renderDataHealth) renderDataHealth()}catch(e){}
+  }
+  function liveProb(f,m){
+    const A=team(f.team_a),B=team(f.team_b); const base=prob(A,B,'group'); if(!m) return base;
+    const min=Math.min(105,+(m.minute||0)); const hg=+(m.home_goals??0), ag=+(m.away_goals??0), gd=hg-ag;
+    let edge=Math.log(Math.max(.01,base.a)/Math.max(.01,base.b)) + gd*(1.05+min/45);
+    let a=1/(1+Math.exp(-edge)); let d=Math.max(.02,base.d*(1-min/120)*(gd===0?1.25:.35)); let b=1-a; const scale=1-d; a*=scale;b*=scale; return {a,d,b};
+  }
+  function liveExpectedScore(f,m){
+    const A=team(f.team_a),B=team(f.team_b); const hg=+(m?.home_goals??0), ag=+(m?.away_goals??0);
+    const p=liveProb(f,m); let h=Math.max(hg,1.1+(rating(A)-rating(B))/100+hg*.7); let a=Math.max(ag,1.0+(rating(B)-rating(A))/110+ag*.7);
+    return {whole:`${Math.round(h)} - ${Math.round(a)}`,dec:`${h.toFixed(1)} - ${a.toFixed(1)}`};
+  }
+  function statusText(f,m){return m?.status?String(m.status).toUpperCase():windowLabel(f)}
+  function eventHTML(m){
+    const ev=(m?.events||[]).filter(e=>/goal|card|substitution|penalty/i.test((e.type||'')+' '+(e.detail||''))).slice(-12);
+    return ev.length?`<div class="event-strip">${ev.map(e=>`<span class="event-pill ${/goal/i.test(e.type+e.detail)?'goal':/red/i.test(e.detail)?'card-red':''}">${e.minute}${e.extra?`+${e.extra}`:''}' ${e.detail||e.type}: ${e.player||''}${e.team?` · ${e.team}`:''}</span>`).join('')}</div>`:'<p class="sub">No goal/card events cached yet.</p>'
+  }
   function lineupOrProjected(country,m){
     const lu=m?.lineups?.find(l=>cleanTeamName(l.team)===cleanTeamName(country));
-    if(lu?.players?.length) return {formation:lu.formation||team(country).formation_primary,source:'API lineup',players:lu.players.slice(0,11).map((name,i)=>({player_name:name,position:i?'XI':'GK',player_impact_score:'—'}))};
-    const t=team(country); return {formation:t.formation_primary,source:'Projected XI',players:expectedXI(country)};
+    if(lu?.players?.length) return {formation:lu.formation||getTeam(country).formation_primary,source:'API lineup',players:lu.players.slice(0,11).map((name,i)=>({player_name:name,position:i?'XI':'Goalkeeper',player_impact_score:'—'}))};
+    return {formation:getTeam(country).formation_primary,source:'Projected XI',players:expectedXI(country)};
   }
-  function livePitch(country,m){const L=lineupOrProjected(country,m); return `<div><div class="sub" style="margin:0 0 8px"><b>${country}</b> · ${L.formation} · ${L.source}</div><div class="field-pro"><div class="lineup-grid">${formationRows(L.players,L.formation).map(row=>`<div class="lineup-row">${row.map(p=>`<div class="lineup-node"><span>${posLabel?posLabel(p):(p.position||'XI')}</span><b>${cleanPlayerName?cleanPlayerName(p):p.player_name}</b><i class="rating-badge">${playerRating?playerRating(p):(p.player_impact_score||'—')}</i></div>`).join('')}</div>`).join('')}</div></div></div>`}
+  function livePitch(country,m){const L=lineupOrProjected(country,m); return `<div><div class="sub" style="margin:0 0 8px"><b>${country}</b> · ${L.formation} · ${L.source}</div><div class="field-pro"><div class="lineup-grid">${formationRows(L.players,L.formation).map(row=>`<div class="lineup-row">${row.map(p=>`<div class="lineup-node"><span>${typeof posLabel==='function'?posLabel(p):(p.position||'XI')}</span><b>${typeof cleanPlayerName==='function'?cleanPlayerName(p):p.player_name}</b><i class="rating-badge">${typeof playerRating==='function'?playerRating(p):(p.player_impact_score||'—')}</i></div>`).join('')}</div>`).join('')}</div></div></div>`}
   function liveMatchCard(f){
-    const A=team(f.team_a),B=team(f.team_b),m=liveFixtureState(f),p=liveProb(f,m),score=liveExpectedScore(f,m),st=statusText(f,m); const live=/live|1h|2h|ht|in_play/i.test(st)||fixtureWindow(f)==='live';
-    return `<div class="live-card ${live?'live-now':''}"><span class="pill ${live?'green':'blue'}">${st} · ${dt(f.datetime_mt)}</span><div class="live-scoreboard"><div class="live-team"><b>${A.flag} ${A.country}</b><div class="sub">${A.formation_primary}</div></div><div class="live-score"><b>${m?`${m.home_goals??0}-${m.away_goals??0}`:'vs'}</b><span>${m?.minute?m.minute+"'":f.group}</span></div><div class="live-team right"><b>${B.country} ${B.flag}</b><div class="sub">${B.formation_primary}</div></div></div><div class="sub">${f.venue}, ${f.city}</div>${eventHTML(m)}<div class="grid three"><div class="stat"><b>${pct(p.a)}</b><span>${A.country} · ${fmtOdds(odds(p.a))}</span></div><div class="stat"><b>${pct(p.d)}</b><span>Draw · ${fmtOdds(odds(p.d))}</span></div><div class="stat"><b>${pct(p.b)}</b><span>${B.country} · ${fmtOdds(odds(p.b))}</span></div></div><p><b>Model score:</b> ${A.country} ${score.whole} ${B.country}<br><span class="sub">Decimal expectation: ${A.country} ${score.dec} ${B.country}</span></p><details><summary><b>Lineups / projected fields</b></summary><div class="grid two">${livePitch(A.country,m)}${livePitch(B.country,m)}</div></details></div>`
+    const A=team(f.team_a),B=team(f.team_b),m=liveFixtureState(f),p=liveProb(f,m),score=liveExpectedScore(f,m),st=statusText(f,m); const isLive=/live|1h|2h|ht|in_play/i.test(st)||fixtureWindow(f)==='live';
+    return `<div class="live-card ${isLive?'live-now':''}"><span class="pill ${isLive?'green':'blue'}">${st} · ${dt(f.datetime_mt)}</span><div class="live-scoreboard"><div class="live-team"><b>${A.flag} ${A.country}</b><div class="sub">${A.formation_primary}</div></div><div class="live-score"><b>${m?`${m.home_goals??0}-${m.away_goals??0}`:'vs'}</b><span>${m?.minute?m.minute+"'":f.group}</span></div><div class="live-team right"><b>${B.country} ${B.flag}</b><div class="sub">${B.formation_primary}</div></div></div><div class="sub">${f.venue}, ${f.city}</div>${eventHTML(m)}<div class="grid three"><div class="stat"><b>${pct(p.a)}</b><span>${A.country} · ${fmtOdds(odds(p.a))}</span></div><div class="stat"><b>${pct(p.d)}</b><span>Draw · ${fmtOdds(odds(p.d))}</span></div><div class="stat"><b>${pct(p.b)}</b><span>${B.country} · ${fmtOdds(odds(p.b))}</span></div></div><p><b>Model score:</b> ${A.country} ${score.whole} ${B.country}<br><span class="sub">Decimal expectation: ${A.country} ${score.dec} ${B.country}</span></p><details><summary><b>Lineups / projected fields</b></summary><div class="grid two">${livePitch(A.country,m)}${livePitch(B.country,m)}</div></details></div>`
   }
-  function matchesForRoom(){
-    const active=activeWindowFixtures(); if(active.length) return active;
-    const future=[...fixtures].filter(f=>new Date(f.datetime_mt)>now()).sort((a,b)=>new Date(a.datetime_mt)-new Date(b.datetime_mt)).slice(0,4);
-    return future.length?future:[...fixtures].sort((a,b)=>new Date(b.datetime_mt)-new Date(a.datetime_mt)).slice(0,4);
-  }
+  function matchesForRoom(){const active=activeWindowFixtures(); if(active.length) return active; return nextFixtures(6).length?nextFixtures(6):(fixtures||[]).slice(0,6)}
   function groupTable(group){
-    const table={}; teams.filter(t=>t.group===group).forEach(t=>table[t.country]={team:t,p:0,w:0,d:0,l:0,gf:0,ga:0,gd:0,pts:0});
-    fixtures.filter(f=>f.group===group).forEach(f=>{const m=liveFixtureState(f); if(!m) return; const hg=+(m.home_goals??0), ag=+(m.away_goals??0); const status=String(m.status||'').toLowerCase(); const count = /ft|full|final|aet|pen|live|1h|2h|ht/.test(status) || fixtureWindow(f)==='live'; if(!count) return; const A=table[f.team_a],B=table[f.team_b]; if(!A||!B) return; A.p++;B.p++;A.gf+=hg;A.ga+=ag;B.gf+=ag;B.ga+=hg; if(hg>ag){A.w++;B.l++;A.pts+=3}else if(ag>hg){B.w++;A.l++;B.pts+=3}else{A.d++;B.d++;A.pts++;B.pts++} A.gd=A.gf-A.ga;B.gd=B.gf-B.ga;});
+    const table={}; (teams||[]).filter(t=>t.group===group).forEach(t=>table[t.country]={team:t,p:0,w:0,d:0,l:0,gf:0,ga:0,gd:0,pts:0});
+    (fixtures||[]).filter(f=>f.group===group).forEach(f=>{const m=liveFixtureState(f); if(!m) return; const status=String(m.status||'').toLowerCase(); const count=/ft|full|final|aet|pen|live|1h|2h|ht/.test(status)||fixtureWindow(f)==='live'; if(!count) return; const hg=+(m.home_goals??0),ag=+(m.away_goals??0),A=table[f.team_a],B=table[f.team_b]; if(!A||!B) return; A.p++;B.p++;A.gf+=hg;A.ga+=ag;B.gf+=ag;B.ga+=hg; if(hg>ag){A.w++;B.l++;A.pts+=3}else if(ag>hg){B.w++;A.l++;B.pts+=3}else{A.d++;B.d++;A.pts++;B.pts++} A.gd=A.gf-A.ga;B.gd=B.gf-B.ga;});
     return Object.values(table).sort((x,y)=>y.pts-x.pts||y.gd-x.gd||y.gf-x.gf||rating(y.team)-rating(x.team));
   }
   function renderStandings(){
+    if(!window.liveStandingsGrid) return;
     const groups=[...new Set(matchesForRoom().map(f=>f.group))].sort();
-    liveStandingsGrid.innerHTML=groups.map(g=>`<div class="card flat"><h3>Group ${g} · as it stands</h3><table class="live-table"><tr><th>Team</th><th>Pts</th><th>GD</th><th>GF</th></tr>${groupTable(g).map((r,i)=>`<tr><td>${i<2?'▲ ':''}${r.team.flag} ${r.team.country}</td><td>${r.pts}</td><td>${r.gd}</td><td>${r.gf}</td></tr>`).join('')}</table></div>`).join('') || '<div class="card flat"><p class="sub">No live group data cached yet.</p></div>';
+    liveStandingsGrid.innerHTML=groups.map(g=>`<div class="card flat"><h3>Group ${g} · as it stands</h3><table class="live-table"><tr><th>Team</th><th>Pts</th><th>GD</th><th>GF</th></tr>${groupTable(g).map((r,i)=>`<tr><td>${i<2?'▲ ':''}${r.team.flag} ${r.team.country}</td><td>${r.pts}</td><td>${r.gd}</td><td>${r.gf}</td></tr>`).join('')}</table></div>`).join('')||'<div class="card flat"><p class="sub">No live group data cached yet.</p></div>';
   }
   window.renderLiveRoom=function(){
-    hydrateSettings(); const c=liveCache(); const s=settings(); const active=activeWindowFixtures(); const room=matchesForRoom();
-    const last=c.last_success?new Date(c.last_success):null; const lastAge=last?Math.round((Date.now()-last.getTime())/60000):null; const canCall=shouldCallAPI();
-    if(liveDot){liveDot.classList.remove('on','warn','off'); liveDot.classList.add(active.length?'on':(s.workerUrl?'warn':'off'))}
-    if(liveKpis) liveKpis.innerHTML=`<div class="live-kpi"><b>${active.length}</b><span>Open API windows</span></div><div class="live-kpi"><b>${Object.keys(c.matches||{}).length}</b><span>Cached matches</span></div><div class="live-kpi"><b>${lastAge===null?'—':lastAge+'m'}</b><span>Last live update age</span></div><div class="live-kpi"><b>${canCall?'Ready':'Idle'}</b><span>Autopilot state</span></div>`;
-    if(apiWindows) apiWindows.innerHTML=room.slice(0,6).map(f=>`<div class="api-window"><b>${team(f.team_a).flag} ${f.team_a} vs ${team(f.team_b).flag} ${f.team_b}</b><span>${dt(f.datetime_mt)} · ${apiWindowLabel(f)} · ${f.venue}</span></div>`).join('');
-    if(liveMatchGrid) liveMatchGrid.innerHTML=room.map(liveMatchCard).join('');
-    if(liveTickerTrack){const ev=Object.values(c.matches||{}).flatMap(m=>(m.events||[]).map(e=>({...e,match:m}))).slice(-20); const items=ev.length?ev:room.map(f=>({type:'Scheduled',minute:'',player:`${f.team_a} vs ${f.team_b}`,team:dt(f.datetime_mt),match:{home:f.team_a,away:f.team_b}})); liveTickerTrack.innerHTML=[...items,...items].map(e=>`<div class="tick"><div class="ticker-label">${e.type||'Event'} ${e.minute?`· ${e.minute}'`:''}</div><b>${e.player||'Match update'}</b><div class="sub">${e.team||''} · ${e.match?.home||''} vs ${e.match?.away||''}</div></div>`).join('')}
+    hydrateSettings(); applyLiveCacheToData(); const c=liveCache(), s=settings(), active=activeWindowFixtures(), room=matchesForRoom();
+    const last=c.last_success?new Date(c.last_success):null, lastAge=last?Math.round((Date.now()-last.getTime())/60000):null, canCall=shouldCallAPI();
+    if(window.liveDot){liveDot.classList.remove('on','warn','off'); liveDot.classList.add(c.last_status==='error'?'off':(active.length?'on':'warn'))}
+    if(window.liveKpis) liveKpis.innerHTML=`<div class="live-kpi"><b>${active.length}</b><span>Open API windows</span></div><div class="live-kpi"><b>${Object.keys(c.matches||{}).length}</b><span>Cached matches</span></div><div class="live-kpi"><b>${lastAge===null?'—':lastAge+'m'}</b><span>Last update age</span></div><div class="live-kpi"><b>${canCall?'Ready':'Idle'}</b><span>Autopilot state</span></div>`;
+    if(window.apiWindows) apiWindows.innerHTML=room.slice(0,6).map(f=>`<div class="api-window"><b>${team(f.team_a).flag} ${f.team_a} vs ${team(f.team_b).flag} ${f.team_b}</b><span>${dt(f.datetime_mt)} · ${windowLabel(f)} · ${f.venue}</span></div>`).join('');
+    if(window.liveMatchGrid) liveMatchGrid.innerHTML=room.map(liveMatchCard).join('');
+    if(window.liveTickerTrack){const ev=Object.values(c.matches||{}).flatMap(m=>(m.events||[]).map(e=>({...e,match:m}))).slice(-24); const items=ev.length?ev:room.map(f=>({type:'Scheduled',minute:'',player:`${f.team_a} vs ${f.team_b}`,team:dt(f.datetime_mt),match:{home:f.team_a,away:f.team_b}})); liveTickerTrack.innerHTML=[...items,...items].map(e=>`<div class="tick"><div class="ticker-label">${e.type||'Event'} ${e.minute?`· ${e.minute}'`:''}</div><b>${e.player||'Match update'}</b><div class="sub">${e.team||''} · ${e.match?.home||''} vs ${e.match?.away||''}</div></div>`).join('')}
     renderStandings();
-    if(liveCacheLog) liveCacheLog.innerHTML=`<b>Mode:</b> ${s.mode}\n<b>Worker:</b> ${s.workerUrl||'not configured'}\n<b>Refresh seconds:</b> ${refreshSeconds()}\n<b>Last status:</b> ${c.last_status}\n<b>Last success:</b> ${c.last_success||'never'}\n<b>Cached match IDs:</b> ${Object.keys(c.matches||{}).join(', ')||'none'}\n\n${(c.errors||[]).map(e=>`[${e.at}] ${e.message}`).join('\n')}`;
+    if(window.liveCacheLog) liveCacheLog.innerHTML=`<b>Worker:</b> ${s.workerUrl}\n<b>Health:</b> ${c.health?.ok?'passed':'not checked'}\n<b>Mode:</b> ${s.mode}\n<b>Refresh seconds:</b> ${refreshSeconds()}\n<b>Last status:</b> ${c.last_status}\n<b>Last success:</b> ${c.last_success||'never'}\n<b>Cached matches:</b> ${Object.keys(c.matches||{}).length}\n\nDiagnostics:\n${(c.diagnostics||[]).map(d=>`[${d.at}] ${d.type.toUpperCase()}: ${d.message}`).join('\n')||'none'}\n\nErrors:\n${(c.errors||[]).map(e=>`[${e.at}] ${e.message}`).join('\n')||'none'}`;
   }
   window.downloadLiveCache=function(){const blob=new Blob([JSON.stringify(liveCache(),null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='wc26-live-cache.json';a.click()}
-  window.clearLiveCache=function(){localStorage.removeItem(LS_CACHE);renderLiveRoom()}
-  function scheduleLoop(){setInterval(()=>{if(shouldCallAPI()) manualLiveRefresh(); else renderLiveRoom()},30000)}
+  window.clearLiveCache=function(){localStorage.removeItem(LS_CACHE);renderLiveRoom();rippleRender()}
+  function scheduleLoop(){setInterval(()=>{if(shouldCallAPI()) refreshFromWorker(false); else renderLiveRoom()},30000)}
+  const oldTicker=window.renderTicker;
+  if(oldTicker){window.renderTicker=function(){oldTicker(); const track=document.getElementById('tickerTrack'); if(!track) return; const live=Object.values(liveCache().matches||{}).filter(m=>m.home&&m.away); if(!live.length) return; track.innerHTML=[...live,...live].map(m=>`<div class="tick"><div class="ticker-label">LIVE CACHE · ${m.status||'update'}</div><b>${getTeam(m.home).flag||''} ${m.home} ${m.home_goals??0}-${m.away_goals??0} ${getTeam(m.away).flag||''} ${m.away}</b><div class="sub">${(m.events||[]).filter(e=>/goal/i.test(e.type+e.detail)).slice(-2).map(e=>`${e.minute}' ${e.player}`).join(' · ')||'Scores ripple into standings + model odds'}</div></div>`).join('')}}
+  const oldFixtureCard=window.fixtureCard;
+  if(oldFixtureCard){window.fixtureCard=function(f){const html=oldFixtureCard(f), m=liveFixtureState(f); if(!m) return html; const banner=`<div class="live-ripple-banner"><b>Live cache:</b> ${m.home} ${m.home_goals??0}-${m.away_goals??0} ${m.away} · ${m.status||'updated'} ${m.minute?`· ${m.minute}'`:''}</div>`; return html.replace('<div class="card flat match-card-pro">','<div class="card flat match-card-pro live-rippled">'+banner)}}
   const previousInit=window.init;
-  window.init=function(){previousInit(); hydrateSettings(); renderLiveRoom(); scheduleLoop();};
+  window.init=function(){previousInit(); hydrateSettings(); applyLiveCacheToData(); renderLiveRoom(); scheduleLoop(); if(shouldCallAPI()) refreshFromWorker(false);};
 })();
 
 normalizeXIConfidence();
