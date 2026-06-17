@@ -1,0 +1,17 @@
+{
+  "intercept": 1500,
+  "beta_elo": 92,
+  "beta_market": 42,
+  "beta_form": 28,
+  "beta_qualifying": 24,
+  "beta_attack": 38,
+  "beta_defense": 36,
+  "beta_midfield": 28,
+  "beta_goalkeeper": 18,
+  "beta_experience": 18,
+  "beta_depth": 24,
+  "beta_age_fit": 22,
+  "beta_host": 42,
+  "beta_manager": 10,
+  "beta_travel": -8
+}

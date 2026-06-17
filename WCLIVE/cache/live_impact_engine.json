@@ -1,0 +1,153 @@
+{
+  "version": "WCLIVE-impact-engine-v1",
+  "principle": "Every live result is an overlay on top of the master model cache. The app computes before/after deltas instead of overwriting the base model.",
+  "feature_windows": [
+    {
+      "id": "matchday_pulse",
+      "name": "Matchday Pulse",
+      "inputs": [
+        "live_results_overlay",
+        "fixture_model_baselines",
+        "team_strengths"
+      ],
+      "outputs": [
+        "latest_finals",
+        "live_games",
+        "next_games",
+        "goal_events",
+        "stock_tags"
+      ]
+    },
+    {
+      "id": "group_survival",
+      "name": "Group Survival",
+      "inputs": [
+        "live_results_overlay",
+        "fixtures_master",
+        "team_strengths"
+      ],
+      "outputs": [
+        "as_it_stands_table",
+        "advance_probability_delta",
+        "must_win_meter",
+        "best_third_path"
+      ]
+    },
+    {
+      "id": "overreaction_meter",
+      "name": "Overreaction Meter",
+      "inputs": [
+        "actual_result",
+        "pre_match_probabilities",
+        "expected_score",
+        "team_strengths"
+      ],
+      "outputs": [
+        "buy_the_dip",
+        "confirmed_signal",
+        "fraud_watch",
+        "small_sample_theater",
+        "market_overreaction"
+      ]
+    },
+    {
+      "id": "best_futures_movement",
+      "name": "Best Futures Movement",
+      "inputs": [
+        "monte_carlo_before",
+        "monte_carlo_after",
+        "live_results_overlay"
+      ],
+      "outputs": [
+        "biggest_title_risers",
+        "biggest_title_fallers",
+        "value_flags",
+        "public_trap_flags"
+      ]
+    },
+    {
+      "id": "next_fixtures_war_room",
+      "name": "Next Fixtures War Room",
+      "inputs": [
+        "fixture_model_baselines",
+        "live_group_table",
+        "expected_xis_master",
+        "players_master"
+      ],
+      "outputs": [
+        "expected_score",
+        "projected_xi",
+        "key_matchup",
+        "result_consequence_cards"
+      ]
+    },
+    {
+      "id": "monte_carlo_title_board",
+      "name": "Monte Carlo Title Board",
+      "inputs": [
+        "master_model_cache",
+        "live_results_overlay",
+        "fixture_model_baselines"
+      ],
+      "outputs": [
+        "champion_probability",
+        "round_reach_probability",
+        "path_map",
+        "interactive_mode_state"
+      ]
+    }
+  ],
+  "impact_rules": [
+    {
+      "event": "goal",
+      "direct_effects": [
+        "scoreline",
+        "group_goal_difference",
+        "match_win_probability"
+      ],
+      "secondary_effects": [
+        "advance_odds",
+        "future_odds",
+        "overreaction_meter"
+      ]
+    },
+    {
+      "event": "final_result",
+      "direct_effects": [
+        "points",
+        "group_table",
+        "head_to_head_context"
+      ],
+      "secondary_effects": [
+        "monte_carlo_reseed",
+        "futures_movement",
+        "next_fixture_pressure"
+      ]
+    },
+    {
+      "event": "upset_result",
+      "definition": "winner_pre_match_probability_under_40_percent",
+      "labels": [
+        "market_shock",
+        "dark_horse_watch",
+        "favorite_pressure"
+      ]
+    },
+    {
+      "event": "favorite_draw_or_loss",
+      "definition": "favorite_pre_match_probability_over_55_percent_and_not_win",
+      "labels": [
+        "fraud_watch_candidate",
+        "buy_the_dip_possible",
+        "group_pressure_rising"
+      ]
+    },
+    {
+      "event": "ugly_win",
+      "definition": "favorite_wins_by_one_or_less_vs_lower_rated_team",
+      "labels": [
+        "result_good_process_suspect"
+      ]
+    }
+  ]
+}

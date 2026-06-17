@@ -1,0 +1,106 @@
+{
+  "windows": [
+    {
+      "id": "matchday_pulse",
+      "name": "Matchday Pulse",
+      "inputs": [
+        "live_results_overlay",
+        "fixture_model_baselines",
+        "team_strengths"
+      ],
+      "outputs": [
+        "latest_finals",
+        "live_games",
+        "next_games",
+        "goal_events",
+        "stock_tags"
+      ]
+    },
+    {
+      "id": "group_survival",
+      "name": "Group Survival",
+      "inputs": [
+        "live_results_overlay",
+        "fixtures_master",
+        "team_strengths"
+      ],
+      "outputs": [
+        "as_it_stands_table",
+        "advance_probability_delta",
+        "must_win_meter",
+        "best_third_path"
+      ]
+    },
+    {
+      "id": "overreaction_meter",
+      "name": "Overreaction Meter",
+      "inputs": [
+        "actual_result",
+        "pre_match_probabilities",
+        "expected_score",
+        "team_strengths"
+      ],
+      "outputs": [
+        "buy_the_dip",
+        "confirmed_signal",
+        "fraud_watch",
+        "small_sample_theater",
+        "market_overreaction"
+      ]
+    },
+    {
+      "id": "best_futures_movement",
+      "name": "Best Futures Movement",
+      "inputs": [
+        "monte_carlo_before",
+        "monte_carlo_after",
+        "live_results_overlay"
+      ],
+      "outputs": [
+        "biggest_title_risers",
+        "biggest_title_fallers",
+        "value_flags",
+        "public_trap_flags"
+      ]
+    },
+    {
+      "id": "next_fixtures_war_room",
+      "name": "Next Fixtures War Room",
+      "inputs": [
+        "fixture_model_baselines",
+        "live_group_table",
+        "expected_xis_master",
+        "players_master"
+      ],
+      "outputs": [
+        "expected_score",
+        "projected_xi",
+        "key_matchup",
+        "result_consequence_cards"
+      ]
+    },
+    {
+      "id": "monte_carlo_title_board",
+      "name": "Monte Carlo Title Board",
+      "inputs": [
+        "master_model_cache",
+        "live_results_overlay",
+        "fixture_model_baselines"
+      ],
+      "outputs": [
+        "champion_probability",
+        "round_reach_probability",
+        "path_map",
+        "interactive_mode_state"
+      ]
+    }
+  ],
+  "navigation_order": [
+    "matchday_pulse",
+    "group_survival",
+    "overreaction_meter",
+    "best_futures_movement",
+    "next_fixtures_war_room",
+    "monte_carlo_title_board"
+  ]
+}

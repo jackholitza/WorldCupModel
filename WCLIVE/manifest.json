@@ -1,0 +1,89 @@
+{
+  "version": "WCLIVE-cache-master-v1",
+  "created_for": "Jack Holitza World Cup live model rebuild",
+  "do_not_build_application_yet": true,
+  "counts": {
+    "teams": 48,
+    "players": 1248,
+    "fixtures": 72,
+    "expected_xis": 48
+  },
+  "files": [
+    {
+      "path": "cache/master_cache.json",
+      "bytes": 3751668
+    },
+    {
+      "path": "cache/teams_master.json",
+      "bytes": 66719
+    },
+    {
+      "path": "cache/players_master.json",
+      "bytes": 3357154
+    },
+    {
+      "path": "cache/fixtures_master.json",
+      "bytes": 37195
+    },
+    {
+      "path": "cache/expected_xis_master.json",
+      "bytes": 61634
+    },
+    {
+      "path": "cache/model_coefficients.json",
+      "bytes": 326
+    },
+    {
+      "path": "cache/roster_sources.json",
+      "bytes": 24578
+    },
+    {
+      "path": "cache/team_aliases.json",
+      "bytes": 639
+    },
+    {
+      "path": "cache/live_results_overlay.seed.json",
+      "bytes": 1836
+    },
+    {
+      "path": "cache/live_impact_engine.json",
+      "bytes": 3588
+    },
+    {
+      "path": "cache/forecast_windows_manifest.json",
+      "bytes": 2343
+    },
+    {
+      "path": "cache/derived/team_strengths.json",
+      "bytes": 25333
+    },
+    {
+      "path": "cache/derived/player_index.json",
+      "bytes": 813982
+    },
+    {
+      "path": "cache/derived/fixture_model_baselines.json",
+      "bytes": 49673
+    },
+    {
+      "path": "cache/derived/live_group_table_seed.json",
+      "bytes": 7600
+    },
+    {
+      "path": "schemas/live_result_schema.json",
+      "bytes": 282
+    },
+    {
+      "path": "schemas/monte_carlo_state_schema.json",
+      "bytes": 267
+    },
+    {
+      "path": "schemas/impact_delta_schema.json",
+      "bytes": 216
+    },
+    {
+      "path": "embed/WCLIVE_MASTER_EMBED.js",
+      "bytes": 3026641
+    }
+  ]
+}

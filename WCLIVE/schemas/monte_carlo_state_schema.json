@@ -1,0 +1,14 @@
+{
+  "fields": [
+    "sims",
+    "mode",
+    "locked_results",
+    "simulated_results",
+    "group_tables",
+    "qualified_teams",
+    "round_reach_counts",
+    "champion_counts",
+    "futures_delta"
+  ],
+  "purpose": "Tournament-long interactive Monte Carlo state."
+}

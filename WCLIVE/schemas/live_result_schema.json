@@ -1,0 +1,16 @@
+{
+  "fields": [
+    "match_id_api",
+    "home",
+    "away",
+    "home_score",
+    "away_score",
+    "finished",
+    "time_elapsed",
+    "home_scorers",
+    "away_scorers",
+    "group",
+    "local_date"
+  ],
+  "purpose": "Normalized live result consumed by the live impact engine."
+}

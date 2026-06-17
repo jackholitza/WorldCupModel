@@ -1,0 +1,13 @@
+{
+  "fields": [
+    "entity_type",
+    "entity_id",
+    "before",
+    "after",
+    "delta",
+    "reason",
+    "source_match_id",
+    "window_id"
+  ],
+  "purpose": "Universal before/after live-result impact record."
+}
